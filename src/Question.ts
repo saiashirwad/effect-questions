@@ -1,86 +1,62 @@
 import { Record, Schema } from "effect";
+import * as Answer from "./Answer.ts";
 
-export const Probability = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 }));
+export const ChoiceDefinition = Schema.Struct({
+  type: Schema.Literal("choice"),
+  instructions: Schema.NonEmptyString,
+  criteria: Schema.Record(Schema.String, Schema.NullOr(Schema.String)).check(
+    Schema.isMinProperties(2),
+  ),
+});
+
+export const ScoreDefinition = Schema.Struct({
+  type: Schema.Literal("score"),
+  instructions: Schema.NonEmptyString,
+  criteria: Schema.Array(Schema.String).check(Schema.isMinLength(2)),
+});
+
+export const BooleanDefinition = Schema.Struct({
+  type: Schema.Literal("boolean"),
+  instructions: Schema.NonEmptyString,
+  criteria: Schema.optionalKey(Schema.Struct({ true: Schema.String, false: Schema.String })),
+});
+
+export const Definition = Schema.Union([ChoiceDefinition, ScoreDefinition, BooleanDefinition]);
 
 export interface Question<A> {
   readonly definition: typeof Definition.Type;
   readonly answer: Schema.Codec<A>;
 }
 
-const Criteria = Schema.Record(Schema.String, Schema.NullOr(Schema.String)).check(
-  Schema.isMinProperties(2),
-  Schema.isMaxProperties(255),
-);
-
-export const Definition = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal("choice"),
-    instructions: Schema.NonEmptyString,
-    criteria: Criteria,
-  }),
-  Schema.Struct({
-    type: Schema.Literal("score"),
-    instructions: Schema.NonEmptyString,
-    criteria: Schema.Array(Schema.String).check(Schema.isMinLength(2), Schema.isMaxLength(255)),
-  }),
-  Schema.Struct({
-    type: Schema.Literal("noul"),
-    instructions: Schema.NonEmptyString,
-    criteria: Schema.optionalKey(Schema.Struct({
-      true: Schema.String,
-      false: Schema.String,
-    })),
-  }),
-]);
-
-export const choice = <const L extends readonly [string, string, ...string[]]>(
-  options: Schema.Literals<L>,
+export const choice = <const Options extends ReadonlyArray<string>>(
+  options: Schema.Literals<Options>,
   config: {
     readonly instructions: string;
-    readonly criteria: { readonly [K in L[number]]: string | null; };
+    readonly criteria: { readonly [K in NoInfer<Options[number]>]: string | null; };
   },
-) => ({
-  definition: { type: "choice" as const, ...config },
-  answer: Schema.Struct({
-    type: Schema.Literal("choice"),
-    choice: options,
-    probabilities: Schema.Record(options, Probability),
-    confidence: Probability,
-  }),
+): Question<Answer.Choice<Options[number]>> => ({
+  definition: { type: "choice", ...config },
+  answer: Answer.Choice(options),
 });
 
 export const score = (config: {
   readonly instructions: string;
   readonly criteria: readonly [string, string, ...string[]];
-}) => {
-  const levels = Schema.Literals(config.criteria.map((_, index) => String(index)));
-  return {
-    definition: { type: "score" as const, ...config },
-    answer: Schema.Struct({
-      type: Schema.Literal("score"),
-      score: Schema.Finite.check(Schema.isBetween({
-        minimum: 0,
-        maximum: config.criteria.length - 1,
-      })),
-      probabilities: Schema.Record(levels, Probability),
-      confidence: Probability,
-      legend: Schema.Record(levels, Schema.String),
-    }),
-  };
-};
+}): Question<Answer.Score> => ({
+  definition: { type: "score", ...config },
+  answer: Answer.Score(config.criteria),
+});
 
-export const Noul = Schema.Struct({ type: Schema.Literal("noul"), noul: Probability });
-export type Noul = typeof Noul.Type;
-
-export const noul = (
+export const boolean = (
   instructions: string,
   criteria?: { readonly true: string; readonly false: string; },
-): Question<Noul> => ({
-  definition: { type: "noul", instructions, ...(criteria === undefined ? {} : { criteria }) },
-  answer: Noul,
+): Question<Answer.Boolean> => ({
+  definition: { type: "boolean", instructions, ...(criteria === undefined ? {} : { criteria }) },
+  answer: Answer.Boolean,
 });
 
 export type Questions = Record.ReadonlyRecord<string, Question<unknown>>;
+
 export type Answers<Q extends Questions> = {
   readonly [K in keyof Q]: Q[K]["answer"]["Type"];
 };

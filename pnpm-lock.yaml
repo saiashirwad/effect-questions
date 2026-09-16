@@ -7,20 +7,19 @@ settings:
 importers:
 
   .:
-    dependencies:
+    devDependencies:
       '@effect/platform-node':
         specifier: 4.0.0-rc.115
         version: 4.0.0-rc.115(effect@4.0.0-rc.115)(redis@6.2.1)
-      effect:
-        specifier: 4.0.0-rc.115
-        version: 4.0.0-rc.115
-    devDependencies:
       '@types/node':
         specifier: ^22.20.3
         version: 22.20.3
       dprint:
         specifier: ^0.57.4
         version: 0.57.4
+      effect:
+        specifier: 4.0.0-rc.115
+        version: 4.0.0-rc.115
       oxlint:
         specifier: ^1.83.0
         version: 1.83.0
