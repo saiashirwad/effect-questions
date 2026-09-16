@@ -2,7 +2,7 @@
   "name": "effect-questions",
   "version": "0.0.0",
   "private": true,
-  "description": "Schema-backed semantic questions and evidence-driven control flow for Effect",
+  "description": "Type-safe AI judgments and probabilistic control flow for Effect.",
   "type": "module",
   "packageManager": "pnpm@11.20.0",
   "engines": {
