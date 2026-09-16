@@ -60,6 +60,11 @@ const loadDiagnostics = Effect.fn("loadDiagnostics")(function*() {
   };
 });
 
+const decideRecommendation = Decision.minimizeLoss({
+  recommend: { true: 0, false: 10 },
+  investigateFurther: 1,
+});
+
 const diagnose = Effect.fn("diagnose")(function*(ticket: Ticket) {
   const candidates = yield* loadDiagnostics();
   const selection = yield* QuestionModel.choose({
@@ -86,16 +91,12 @@ const diagnose = Effect.fn("diagnose")(function*(ticket: Ticket) {
     ),
   });
 
-  const decision = yield* Decision.minimizeLoss(
+  const decision = yield* decideRecommendation(
     Answer.fromBoolean(verification.answers.supported),
-    {
-      recommend: (supported) => supported === "true" ? 0 : 10,
-      investigateFurther: () => 1,
-    },
   );
   yield* Effect.log("Verification evidence", { answers: verification.answers, decision });
 
-  if (decision.action === "investigateFurther" || verification.answers.helpful.probability < 0.8) {
+  if (decision.choice === "investigateFurther" || verification.answers.helpful.probability < 0.8) {
     return { _tag: "InvestigateFurther" as const, diagnostic: selection.choice, observation };
   }
   return { _tag: "Recommendation" as const, diagnostic: selection.choice, ...observation };

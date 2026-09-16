@@ -2,13 +2,14 @@
 
 Type-safe AI judgments and probabilistic control flow for Effect.
 
-Ask schema-backed choice, score, and boolean questions. Keep the full probability distributions,
-then use ordinary Effects to decide what happens next. Batch independent judgments; compose dependent
-steps with `yield*`. The model supplies evidence; your code chooses thresholds, costs, and actions.
+Bind context with `Questions.about(state)`. Ask with `yield* q.is(question)`, batch with
+`q.ask`, or run lazy Effect handlers with `q.branch`. Use ordinary `if` statements and
+generators; retain detailed evidence when you need confidence or expected-loss policies.
 
-- **Question** — define judgments and their answer schemas.
+- **Questions** — bind context, ask questions, and branch into ordinary Effects.
+- **Question** — define typed batches when you need explicit schemas.
 - **Answer** — rank outcomes, aggregate probabilities, and calculate expected values.
-- **Decision** — require confidence, minimize expected loss, and dispatch effects exhaustively.
+- **Decision** — inspect expected losses, choose actions, and dispatch effects exhaustively.
 - **QuestionModel** — evaluate batches and select original application objects through replaceable providers.
 
 [Jev](https://typesafe.ai) is the first provider. Built on Effect v4 and TypeScript 7.
@@ -20,10 +21,10 @@ Requires Node 24 and pnpm. The live example reads `TYPESAFE_API_KEY` from your e
 ```sh
 pnpm install
 node examples/evidence.ts
-node examples/main.ts
+node examples/flow.ts
 ```
 
-[Evidence](examples/evidence.ts) demonstrates offline decisions.
-[Triage](examples/triage.ts) selects a diagnostic, executes its Effect, and verifies the finding with AI.
+[Runnable workflows](examples/README.md): Git-diff check selection, source-based documentation audits,
+live GitHub issue triage, support diagnostics, and offline decisions.
 
 Development: `pnpm check` · `pnpm build`.

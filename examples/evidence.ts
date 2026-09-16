@@ -16,9 +16,9 @@ const main = Effect.gen(function*() {
     (intent) => intent === "technical-problem" ? "technical" : "billing",
   );
   const decision = yield* Decision.minimizeLoss(departments, {
-    billing: (department) => department === "billing" ? 0 : 2,
+    billing: { billing: 0, technical: 2 },
     technical: (department) => department === "technical" ? 0 : 3,
-    clarify: () => 1,
+    clarify: 1,
   });
 
   yield* Console.log({
@@ -31,7 +31,7 @@ const main = Effect.gen(function*() {
     decision,
   });
 
-  yield* Decision.match({ choice: decision.action }, {
+  yield* Decision.match(decision, {
     billing: () =>
       Console.log("Route to billing: lowest expected loss, despite low fine-grained confidence."),
     technical: () => Console.log("Route to technical support."),

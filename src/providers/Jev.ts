@@ -1,3 +1,12 @@
+/**
+ * Jev's implementation of the provider-neutral `QuestionModel` service.
+ *
+ * The adapter owns TypeSafe's HTTP protocol, `noul` conversion, token-usage
+ * normalization, and provider-specific cardinality limits. Applications supply
+ * an Effect `HttpClient` when composing the layer.
+ *
+ * @since 0.0.0
+ */
 import {
   Config,
   Effect,
@@ -14,12 +23,23 @@ import * as Answer from "../Answer.ts";
 import * as Question from "../Question.ts";
 import { QuestionError, QuestionModel, State, Usage } from "../QuestionModel.ts";
 
+/**
+ * Resolved Jev connection settings. Use `layerConfig` to obtain settings from
+ * Effect `Config` without coupling the provider to environment variable names.
+ *
+ * @category configuration
+ * @since 0.0.0
+ */
 export interface Options {
+  /** API key used as a bearer token, redacted when inspecting configuration. */
   readonly apiKey: Redacted.Redacted<string>;
+  /** Model identifier. Defaults to `"jev-latest"`. */
   readonly model?: string;
+  /** API base URL. Defaults to `"https://api.typesafe.ai/v1"`. */
   readonly apiUrl?: string;
 }
 
+/** Translates TypeSafe's `noul` answer into the provider-neutral boolean shape. */
 const Noul = Schema.Struct({ type: Schema.Literal("noul"), noul: Answer.Probability }).pipe(
   Schema.decodeTo(Answer.Boolean, {
     decode: SchemaGetter.transform(({ noul }) => ({ type: "boolean" as const, probability: noul })),
@@ -30,6 +50,7 @@ const Noul = Schema.Struct({ type: Schema.Literal("noul"), noul: Answer.Probabil
   }),
 );
 
+/** Converts snake-case wire counters to the shared camel-case usage model. */
 const WireUsage = Schema.Struct({
   input_tokens: Usage.fields.inputTokens,
   output_tokens: Usage.fields.outputTokens,
@@ -46,6 +67,10 @@ const WireUsage = Schema.Struct({
   }),
 );
 
+/**
+ * Decodes the wire envelope and each question's normalized answer. The assertion
+ * restores the association between question keys and their individual decoders.
+ */
 const Response = <Q extends Question.Questions>(questions: Q) =>
   Schema.Struct({
     model: Schema.String,
@@ -56,6 +81,7 @@ const Response = <Q extends Question.Questions>(questions: Q) =>
         : question.answer)) as Schema.Decoder<Question.Answers<Q>>,
   });
 
+/** Validates Jev's non-empty batch and limits each choice or score to 255 entries. */
 const Request = Schema.Struct({
   model: Schema.NonEmptyString,
   state: State,
@@ -75,6 +101,20 @@ const Request = Schema.Struct({
   ).check(Schema.isMinProperties(1)),
 });
 
+/**
+ * Constructs a `QuestionModel` implementation using the provided `HttpClient`.
+ *
+ * Evaluations validate requests and responses, normalize Jev's answer shapes,
+ * and wrap operational failures in `QuestionError` with their original cause.
+ * HTTP 429 and 529 responses are retried twice with exponential backoff starting
+ * at 200ms. Other statuses and schema failures are not retried by this adapter.
+ *
+ * No workflow timeout or confidence policy is imposed. Configure those at the
+ * application boundary using ordinary Effect operations.
+ *
+ * @category constructors
+ * @since 0.0.0
+ */
 export const make = Effect.fnUntraced(function*({ apiKey, model, apiUrl }: Options) {
   const client = yield* HttpClient.HttpClient.pipe(
     Effect.map(HttpClient.mapRequest(flow(
@@ -83,7 +123,7 @@ export const make = Effect.fnUntraced(function*({ apiKey, model, apiUrl }: Optio
       HttpClientRequest.acceptJson,
     ))),
     Effect.map(HttpClient.filterStatusOk),
-    // TypeSafe recommends exponential backoff for 429/529: https://docs.typesafe.ai/api#handling-rate-limits
+    /** TypeSafe recommends exponential backoff: https://docs.typesafe.ai/api#handling-rate-limits */
     Effect.map(HttpClient.retry({
       times: 2,
       schedule: Schedule.exponential("200 millis"),
@@ -93,6 +133,7 @@ export const make = Effect.fnUntraced(function*({ apiKey, model, apiUrl }: Optio
     })),
   );
 
+  /** Encodes one batch and decodes its schema-specific response under a tracing span. */
   const evaluate = Effect.fn("Jev.evaluate")(
     function*<const Q extends Question.Questions>(state: State, questions: Q) {
       const request = yield* HttpClientRequest.post("/systemone").pipe(
@@ -115,7 +156,34 @@ export const make = Effect.fnUntraced(function*({ apiKey, model, apiUrl }: Optio
   return QuestionModel.of({ evaluate });
 });
 
+/**
+ * Provides `QuestionModel` from resolved options, requiring an `HttpClient`.
+ * Construction does not make a network request.
+ *
+ * @category layers
+ * @since 0.0.0
+ */
 export const layer = (options: Options) => Layer.effect(QuestionModel, make(options));
 
+/**
+ * Provides `QuestionModel` from plain values or Effect `Config` settings.
+ *
+ * Requires an `HttpClient` and may fail with `ConfigError` while resolving options.
+ * Supply the transport once when building the application's layer.
+ *
+ * @example
+ * ```ts
+ * import { Config, Layer } from "effect";
+ * import { FetchHttpClient } from "effect/unstable/http";
+ * import * as Jev from "effect-questions/providers/Jev";
+ *
+ * const QuestionsLive = Jev.layerConfig({
+ *   apiKey: Config.Redacted("TYPESAFE_API_KEY"),
+ * }).pipe(Layer.provide(FetchHttpClient.layer));
+ * ```
+ *
+ * @category layers
+ * @since 0.0.0
+ */
 export const layerConfig = (options: Config.Wrap<Options>) =>
   Layer.effect(QuestionModel, Config.unwrap(options).pipe(Effect.flatMap(make)));

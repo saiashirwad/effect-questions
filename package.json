@@ -13,6 +13,7 @@
     "./Answer": { "types": "./dist/Answer.d.ts", "import": "./dist/Answer.js" },
     "./Decision": { "types": "./dist/Decision.d.ts", "import": "./dist/Decision.js" },
     "./Question": { "types": "./dist/Question.d.ts", "import": "./dist/Question.js" },
+    "./Questions": { "types": "./dist/Questions.d.ts", "import": "./dist/Questions.js" },
     "./QuestionModel": {
       "types": "./dist/QuestionModel.d.ts",
       "import": "./dist/QuestionModel.js"
@@ -22,7 +23,8 @@
   "types": "./dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "example": "node examples/main.ts",
+    "example": "node examples/flow.ts",
+    "example:triage": "node examples/main.ts",
     "example:evidence": "node examples/evidence.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
