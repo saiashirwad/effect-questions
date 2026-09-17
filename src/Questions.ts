@@ -322,12 +322,11 @@ export type Predicate = (
 >;
 
 /**
- * Turns a question into a predicate over context, for use wherever Effect takes
- * one: `Effect.filter`, `Effect.findFirst`, `Stream.filterEffect`, `Effect.retry`,
- * `Stream.takeUntilEffect`.
+ * Turns a yes/no question into a predicate over context, for use wherever Effect
+ * takes one: `Effect.filter`, `Effect.findFirst`, `Stream.filterEffect`,
+ * `Effect.retry`, `Stream.takeUntilEffect`.
  *
- * The second form asks a batch in one request and lets a plain formula combine
- * the answers with `&&`, `||`, and `!`.
+ * To combine several answers, ask a batch and map over it with ordinary code.
  *
  * @example
  * ```ts
@@ -336,36 +335,15 @@ export type Predicate = (
  *
  * const transient = Questions.is("Does this error describe a temporary failure?");
  *
- * const actionable = Questions.is({
- *   bug: "Is this a bug report?",
- *   reproducible: "Does it include steps to reproduce?",
- *   security: "Does it describe a security issue?",
- * }, (it) => (it.bug && it.reproducible) || it.security);
- *
- * const program = (issues: ReadonlyArray<string>) =>
- *   Effect.filter(issues, actionable, { concurrency: 4 });
+ * const program = (messages: ReadonlyArray<string>) =>
+ *   Effect.filter(messages, Questions.is("Is this message spam?"), { concurrency: 4 });
  * ```
  *
  * @category constructors
  * @since 0.0.0
  */
-export function is(question: string, options?: Options): Predicate;
-export function is<const Q extends Batch>(
-  questions: Q,
-  formula: (values: Values<Q>) => boolean,
-  options?: Options,
-): Predicate;
-export function is(
-  questions: string | Batch,
-  formula?: Options | ((values: never) => boolean),
-  options?: Options,
-): Predicate {
-  if (Predicate.isString(questions)) {
-    return (state) => about(state).is(questions, formula as Options | undefined);
-  }
-  const combine = formula as (values: Values<Batch>) => boolean;
-  return (state) => Effect.map(about(state).ask(questions, options), combine);
-}
+export const is = (question: string, options?: Options): Predicate => (state) =>
+  about(state).is(question, options);
 
 /**
  * Binds a collection so that `is`, `score`, and `ask` judge every item in one

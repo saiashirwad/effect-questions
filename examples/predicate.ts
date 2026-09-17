@@ -8,11 +8,12 @@ import { Jev, Questions } from "../src/index.ts";
 
 const isRelease = Questions.is("Does this commit message describe a release or version bump?");
 
-const userFacing = Questions.is({
-  behavior: "Does this commit change behavior a user would notice?",
-  cosmetic: "Is this only wording, formatting, or documentation?",
-  fix: "Does this fix a bug?",
-}, (it) => (it.behavior && !it.cosmetic) || it.fix);
+const userFacing = (commit: string) =>
+  Questions.about(commit).ask({
+    behavior: "Does this commit change behavior a user would notice?",
+    cosmetic: "Is this only wording, formatting, or documentation?",
+    fix: "Does this fix a bug?",
+  }).pipe(Effect.map((it) => (it.behavior && !it.cosmetic) || it.fix));
 
 const changelog = Effect.gen(function*() {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
