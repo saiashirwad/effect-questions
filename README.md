@@ -34,6 +34,31 @@ the fallback belongs.
 - `branch`: pick a handler by its description and run only that one.
 - `probability`, `score`, `evidence`: the numbers behind an answer.
 
+Two more shapes. `Questions.is(question)` is a predicate over context. Give it a batch and a
+formula to combine answers with `&&`, `||`, and `!`, still in one request. `Questions.each(items)`
+binds a whole collection and answers for every item in one request.
+
+```ts
+const transient = Questions.is("Does this error describe a temporary failure?");
+
+const actionable = Questions.is({
+  bug: "Is this a bug report?",
+  reproducible: "Does it include steps to reproduce?",
+  security: "Does it describe a security issue?",
+}, (it) => (it.bug && it.reproducible) || it.security);
+
+const program = Effect.gen(function*() {
+  const report = yield* fetchReport.pipe(Effect.retry({ while: transient, times: 3 }));
+  const worthReading = yield* Effect.filter(issues, actionable, { concurrency: 4 });
+
+  const urgency = yield* Questions.each(titles).score("How urgent is this?", [
+    "Low",
+    "Medium",
+    "High",
+  ]);
+});
+```
+
 ## Live context
 
 The context can be an Effect. It is read every time a question runs.

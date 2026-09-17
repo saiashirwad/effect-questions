@@ -32,11 +32,6 @@ const workflow = Effect.gen(function*() {
 
   yield* Console.log(`#${issue.number}: ${issue.title}\n${issue.html_url}`);
   const q = Questions.about(summary(issue));
-  const assessment = yield* q.ask({
-    actionable: "Does this report provide concrete behavior or a specific requested change?",
-    reproduction: "Does this report include code or steps that reproduce the problem?",
-  });
-  yield* Console.log(assessment);
 
   yield* q.branch("Which maintainer workflow best fits this issue?", {
     "A reproducible defect needs investigation": () => Console.log("Queue for bug investigation."),

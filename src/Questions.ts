@@ -76,6 +76,18 @@ export interface Options {
   readonly confidence?: number;
 }
 
+/** Prefixes a question so it refers to one item of a collection state. */
+const aboutItem = (id: string, question: string | Question.Question<Primitive>) =>
+  Predicate.isString(question)
+    ? `About ${id}: ${question}`
+    : {
+      ...question,
+      definition: {
+        ...question.definition,
+        instructions: `About ${id}: ${question.definition.instructions}`,
+      },
+    };
+
 /** Extracts the more likely value; an exactly even yes/no probability favors true. */
 const value = (answer: Primitive) => {
   switch (answer.type) {
@@ -294,3 +306,164 @@ export const about = <E = never, R = never>(
     evidence,
   };
 };
+
+/**
+ * The type of a question used as a predicate over context.
+ *
+ * @category models
+ * @since 0.0.0
+ */
+export type Predicate = (
+  state: QuestionModel.State,
+) => Effect.Effect<
+  boolean,
+  QuestionModel.QuestionError | Decision.UncertainDecision,
+  QuestionModel.QuestionModel
+>;
+
+/**
+ * Turns a question into a predicate over context, for use wherever Effect takes
+ * one: `Effect.filter`, `Effect.findFirst`, `Stream.filterEffect`, `Effect.retry`,
+ * `Stream.takeUntilEffect`.
+ *
+ * The second form asks a batch in one request and lets a plain formula combine
+ * the answers with `&&`, `||`, and `!`.
+ *
+ * @example
+ * ```ts
+ * import { Effect } from "effect";
+ * import { Questions } from "effect-questions";
+ *
+ * const transient = Questions.is("Does this error describe a temporary failure?");
+ *
+ * const actionable = Questions.is({
+ *   bug: "Is this a bug report?",
+ *   reproducible: "Does it include steps to reproduce?",
+ *   security: "Does it describe a security issue?",
+ * }, (it) => (it.bug && it.reproducible) || it.security);
+ *
+ * const program = (issues: ReadonlyArray<string>) =>
+ *   Effect.filter(issues, actionable, { concurrency: 4 });
+ * ```
+ *
+ * @category constructors
+ * @since 0.0.0
+ */
+export function is(question: string, options?: Options): Predicate;
+export function is<const Q extends Batch>(
+  questions: Q,
+  formula: (values: Values<Q>) => boolean,
+  options?: Options,
+): Predicate;
+export function is(
+  questions: string | Batch,
+  formula?: Options | ((values: never) => boolean),
+  options?: Options,
+): Predicate {
+  if (Predicate.isString(questions)) {
+    return (state) => about(state).is(questions, formula as Options | undefined);
+  }
+  const combine = formula as (values: Values<Batch>) => boolean;
+  return (state) => Effect.map(about(state).ask(questions, options), combine);
+}
+
+/**
+ * Binds a collection so that `is`, `score`, and `ask` judge every item in one
+ * request and return arrays in item order.
+ *
+ * Items are sent under stable IDs together with each question. Pass `describe`
+ * when items are not already text or JSON. An empty collection makes no request.
+ *
+ * @example
+ * ```ts
+ * import { Effect } from "effect";
+ * import { Questions } from "effect-questions";
+ *
+ * const program = (titles: ReadonlyArray<string>) =>
+ *   Effect.gen(function*() {
+ *     const issues = Questions.each(titles);
+ *     const feature = yield* issues.is("Is this a feature request?");
+ *     const urgency = yield* issues.score("How urgent is this?", ["Low", "Medium", "High"]);
+ *     return titles.filter((_, index) => feature[index]);
+ *   });
+ * ```
+ *
+ * @category constructors
+ * @since 0.0.0
+ */
+export function each<A extends Question.Description>(items: ReadonlyArray<A>): Each;
+export function each<A>(items: ReadonlyArray<A>, describe: (item: A) => Question.Description): Each;
+export function each<A>(
+  items: ReadonlyArray<A>,
+  describe: (item: A) => Question.Description = (item) => item as Question.Description,
+): Each {
+  const ids = items.map((_, index) => `item${index + 1}`);
+  const state = Record.fromEntries(ids.map((id, index) => [id, describe(items[index]!)]));
+
+  /** Asks the batch about every item in one request and regroups the answers by item. */
+  const ask = Effect.fnUntraced(function*<const Q extends Batch>(questions: Q, options?: Options) {
+    if (ids.length === 0) return [] as Array<Values<Q>>;
+    const batch = Record.fromEntries(
+      ids.flatMap((id) =>
+        Record.toEntries(questions).map(([key, question]) =>
+          [`${id}.${key}`, aboutItem(id, question)] as const
+        )
+      ),
+    );
+    const values = yield* about(state).ask(batch, options);
+    return ids.map((id) => Record.map(questions, (_, key) => values[`${id}.${key}`]) as Values<Q>);
+  });
+
+  const is = Effect.fnUntraced(function*(question: string, options?: Options) {
+    return (yield* ask({ answer: question }, options)).map((values) => values.answer);
+  });
+
+  const score = Effect.fnUntraced(function*(
+    question: string,
+    levels: readonly [string, string, ...string[]],
+    options?: Options,
+  ) {
+    return (yield* ask({ answer: Question.score(question, levels) }, options)).map((values) =>
+      values.answer
+    );
+  });
+
+  return { ask, is, score };
+}
+
+/**
+ * Collection-bound operations returned by `each`.
+ *
+ * @category models
+ * @since 0.0.0
+ */
+export interface Each {
+  /** Evaluates a batch for every item in one request; one value record per item. */
+  readonly ask: <const Q extends Batch>(
+    questions: Q,
+    options?: Options,
+  ) => Effect.Effect<
+    Array<Values<Q>>,
+    QuestionModel.QuestionError | Decision.UncertainDecision,
+    QuestionModel.QuestionModel
+  >;
+  /** One yes/no answer per item, in item order. */
+  readonly is: (
+    question: string,
+    options?: Options,
+  ) => Effect.Effect<
+    Array<boolean>,
+    QuestionModel.QuestionError | Decision.UncertainDecision,
+    QuestionModel.QuestionModel
+  >;
+  /** One rubric score per item, in item order. */
+  readonly score: (
+    question: string,
+    levels: readonly [string, string, ...string[]],
+    options?: Options,
+  ) => Effect.Effect<
+    Array<number>,
+    QuestionModel.QuestionError | Decision.UncertainDecision,
+    QuestionModel.QuestionModel
+  >;
+}
