@@ -13,7 +13,7 @@ const userFacing = (commit: string) =>
     behavior: "Does this commit change behavior a user would notice?",
     cosmetic: "Is this only wording, formatting, or documentation?",
     fix: "Does this fix a bug?",
-  }).pipe(Effect.map((it) => (it.behavior && !it.cosmetic) || it.fix));
+  }).pipe(Effect.map(({ behavior, cosmetic, fix }) => (behavior && !cosmetic) || fix));
 
 const changelog = Effect.gen(function*() {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;

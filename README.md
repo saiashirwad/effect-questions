@@ -46,7 +46,7 @@ const actionable = (issue: string) =>
     bug: "Is this a bug report?",
     reproducible: "Does it include steps to reproduce?",
     security: "Does it describe a security issue?",
-  }).pipe(Effect.map((it) => (it.bug && it.reproducible) || it.security));
+  }).pipe(Effect.map(({ bug, reproducible, security }) => (bug && reproducible) || security));
 
 const program = Effect.gen(function*() {
   const report = yield* fetchReport.pipe(Effect.retry({ while: transient, times: 3 }));
