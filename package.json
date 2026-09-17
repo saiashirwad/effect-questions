@@ -2,7 +2,7 @@
   "name": "effect-questions",
   "version": "0.0.0",
   "private": true,
-  "description": "Semantic judgments as ordinary Effect control flow.",
+  "description": "Semantic judgment as a primitive for Effect programs.",
   "type": "module",
   "packageManager": "pnpm@11.20.0",
   "engines": {

@@ -111,12 +111,15 @@ const keyed = <C extends Candidates>(candidates: C): Record<string, Candidate<C>
     : { ...(candidates as Readonly<Record<string, Candidate<C>>>) };
 
 /**
- * Binds shared state to semantic operations requiring a `QuestionModel`.
+ * Binds context to semantic operations requiring a `QuestionModel`.
  *
- * Construction is pure. Each operation evaluates when its Effect runs. `ask`
- * batches independent questions into one evaluation; successive operations can
- * depend on earlier results. Call `about` again when new observations should
- * become part of the state.
+ * The context is a value, or an Effect that produces one: a `Ref.get`, a service
+ * lookup, a file read. An Effect is run each time an operation runs, so one binding
+ * follows context that changes, and an operation such as `q.is(...)` is a reusable
+ * Effect that judges the current context whenever it is executed.
+ *
+ * Construction is pure. `ask` batches independent questions into one evaluation;
+ * successive operations can depend on earlier results.
  *
  * Values are the model's most likely answers: the selected option, or yes when
  * P(true) is at least 0.5. Pass `{ confidence }` to any operation to refuse
@@ -141,13 +144,35 @@ const keyed = <C extends Candidates>(candidates: C): Record<string, Candidate<C>
  * });
  * ```
  *
+ * @example
+ * ```ts
+ * import { Effect, Ref } from "effect";
+ * import { Questions } from "effect-questions";
+ *
+ * const program = Effect.gen(function*() {
+ *   const findings = yield* Ref.make<ReadonlyArray<string>>([]);
+ *   const settled = Questions.about(Ref.get(findings)).is("Do the findings establish the cause?");
+ *   // `settled` re-reads the findings every time it runs
+ *   yield* Ref.update(findings, (all) => [...all, "The token lost deploy:write"]);
+ *   return yield* settled;
+ * });
+ * ```
+ *
  * @category constructors
  * @since 0.0.0
  */
-export const about = (state: QuestionModel.State) => {
-  /** Evaluates explicit question definitions while retaining the full evidence. */
+export const about = <E = never, R = never>(
+  state: QuestionModel.State | Effect.Effect<QuestionModel.State, E, R>,
+) => {
+  const read = (Effect.isEffect(state) ? state : Effect.succeed(state)) as Effect.Effect<
+    QuestionModel.State,
+    E,
+    R
+  >;
+
+  /** Reads the context, then evaluates explicit question definitions with full evidence. */
   const evidence = <const Q extends Question.Questions>(questions: Q) =>
-    QuestionModel.evaluate(state, questions);
+    Effect.flatMap(read, (current) => QuestionModel.evaluate(current, questions));
 
   /** Evaluates a batch in one provider call and projects its answers into values. */
   const ask = Effect.fnUntraced(function*<const Q extends Batch>(questions: Q, options?: Options) {

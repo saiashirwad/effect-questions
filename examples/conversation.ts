@@ -24,52 +24,58 @@ const transcript: ReadonlyArray<Message> = [
   { from: "customer", text: "No, that is all." },
 ];
 
-const assess = (log: ReadonlyArray<Message>) =>
-  Questions.about({ transcript: log }).ask({
-    stage: Question.choice(
-      "After the latest customer message, where does the conversation stand?",
-      {
-        open: "The problem is still being worked out",
-        escalated: "The customer threatens to leave or dispute, or asks for a manager",
-        resolved: "The customer confirms the problem is solved and needs nothing more",
-      },
-    ),
-    temperature: Question.score("How is the customer feeling right now?", [
-      "Calm",
-      "Frustrated",
-      "Very angry",
-    ]),
-  });
+const questions = {
+  stage: Question.choice("After the latest customer message, where does the conversation stand?", {
+    open: "The problem is still being worked out",
+    escalated: "The customer threatens to leave or dispute, or asks for a manager",
+    resolved: "The customer confirms the problem is solved and needs nothing more",
+  }),
+  temperature: Question.score("How is the customer feeling right now?", [
+    "Calm",
+    "Frustrated",
+    "Very angry",
+  ]),
+};
+type Stage = Questions.Values<typeof questions>["stage"];
 
-type Stage = Effect.Success<ReturnType<typeof assess>>["stage"];
+const assess = (log: ReadonlyArray<Message>) => Questions.about({ transcript: log }).ask(questions);
 
 /** Escalation sticks until the conversation resolves; the model never un-escalates. */
 const advance = (current: Stage, observed: Stage): Stage =>
   current === "escalated" && observed === "open" ? "escalated" : observed;
 
-const timeline = Stream.fromIterable(transcript).pipe(
+/** The transcript so far, emitted once per customer message. */
+const customerTurns = Stream.fromIterable(transcript).pipe(
   Stream.scan([] as ReadonlyArray<Message>, (log, message) => [...log, message]),
   Stream.filter((log) => log.at(-1)?.from === "customer"),
-  Stream.mapAccumEffect(
-    () => "open" as Stage,
-    (stage, log) =>
-      assess(log).pipe(Effect.map((answers) => {
-        const next = advance(stage, answers.stage);
-        return [next, [{ turn: log.length, from: stage, to: next, ...answers }]] as const;
-      })),
-  ),
-  Stream.takeUntil((step) => step.to === "resolved"),
 );
 
-const workflow = Stream.runForEach(timeline, (step) =>
-  Effect.gen(function*() {
-    yield* Console.log(`turn ${step.turn}  ${step.to}  temperature ${step.temperature.toFixed(1)}`);
-    if (step.from === step.to) return;
-    if (step.to === "escalated") yield* Console.log("  -> paging a senior agent");
-    if (step.to === "resolved") {
-      yield* Console.log("  -> closing the ticket and sending the survey");
-    }
+/** Judges one turn, advances the stage, and emits what happened. */
+const step = (stage: Stage, log: ReadonlyArray<Message>) =>
+  assess(log).pipe(Effect.map(({ stage: observed, temperature }) => {
+    const next = advance(stage, observed);
+    const event = { turn: log.length, stage: next, changed: next !== stage, temperature };
+    return [next, [event]] as const;
   }));
+
+const reactions: Record<Stage, string> = {
+  open: "",
+  escalated: "  -> paging a senior agent",
+  resolved: "  -> closing the ticket and sending the survey",
+};
+
+const workflow = customerTurns.pipe(
+  Stream.mapAccumEffect(() => "open" as Stage, step),
+  Stream.takeUntil((event) => event.stage === "resolved"),
+  Stream.runForEach((event) =>
+    Effect.gen(function*() {
+      yield* Console.log(
+        `turn ${event.turn}  ${event.stage}  temperature ${event.temperature.toFixed(1)}`,
+      );
+      if (event.changed) yield* Console.log(reactions[event.stage]);
+    })
+  ),
+);
 
 const QuestionsLive = Jev.layerConfig({
   apiKey: Config.Redacted("TYPESAFE_API_KEY"),

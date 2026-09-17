@@ -17,14 +17,17 @@ type Issue = typeof Issue.Type;
 
 const summary = ({ title, body }: Issue) => ({ title, body });
 
+const openIssues = HttpClient.get(`https://api.github.com/repos/${repository}/issues`, {
+  urlParams: { state: "open", sort: "created", direction: "desc", per_page: 50 },
+  headers: { Accept: "application/vnd.github+json", "User-Agent": "effect-questions" },
+}).pipe(
+  Effect.flatMap(HttpClientResponse.filterStatusOk),
+  Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Array(Issue))),
+  Effect.map((items) => items.filter((item) => item.pull_request === undefined)),
+);
+
 const workflow = Effect.gen(function*() {
-  const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
-  const response = yield* client.get(`https://api.github.com/repos/${repository}/issues`, {
-    urlParams: { state: "open", sort: "created", direction: "desc", per_page: 50 },
-    headers: { Accept: "application/vnd.github+json", "User-Agent": "effect-questions" },
-  });
-  const items = yield* HttpClientResponse.schemaBodyJson(Schema.Array(Issue))(response);
-  const [issue, ...others] = items.filter((item) => item.pull_request === undefined);
+  const [issue, ...others] = yield* openIssues;
   if (!issue) return yield* Console.log("No open issues in the fetched page.");
 
   yield* Console.log(`#${issue.number}: ${issue.title}\n${issue.html_url}`);

@@ -1,37 +1,71 @@
 # effect-questions
 
-Semantic judgments as ordinary Effect control flow.
-
-Bind context with `Questions.about(state)`, then write the program you would have written
-anyway: `if (yield* q.is(...))`, `switch` on a typed choice from `q.ask`, pick an application
-object with `q.choose`, or run only the matching handler with `q.branch`. Uncertainty is an
-ordinary error when you ask for a minimum confidence; evidence is available when you want it.
+Semantic judgment as a primitive for Effect programs.
 
 ```ts
-const q = Questions.about(ticket);
+const triage = Effect.gen(function*() {
+  const q = Questions.about(ticket);
 
-if (yield * q.is("Is production work blocked?")) {
-  yield * prioritize(ticket);
-}
+  if (yield* q.is("Is production work blocked?")) {
+    yield* prioritize(ticket);
+  }
 
-return yield * q.branch("What kind of help is needed?", {
-  "Invoices, payments, or refunds": () => handleBilling(ticket),
-  "Bugs, outages, or deployment failures": () => investigate(ticket),
-  "Account access or membership": () => handleAccount(ticket),
-}, { confidence: 0.6 });
+  return yield* q.branch("What kind of help is needed?", {
+    "Invoices, payments, or refunds": () => handleBilling(ticket),
+    "Bugs, outages, or deployment failures": () => investigate(ticket),
+    "Account access or membership": () => handleAccount(ticket),
+  }, { confidence: 0.6 });
+});
 ```
 
-- **Questions** — `about(state)` with `is`, `ask`, `score`, `probability`, `choose`, `rank`, `branch`, `evidence`.
-- **Question** — `choice`, `score`, `boolean` definitions for typed batches; option keys are the answers.
-- **Answer** — rank outcomes, aggregate probabilities, and compute expected values.
-- **Decision** — confidence gates, expected losses, and exhaustive dispatch over evidence.
-- **QuestionModel** — the provider service; [Jev](https://typesafe.ai) is the first provider.
+Only the chosen handler runs. Its result, errors, and services flow through the returned Effect.
+If the model is not confident enough, the Effect fails with `UncertainDecision`. Catch it where
+the fallback belongs.
+
+## Operations
+
+`Questions.about(state)` gives you:
+
+- `is`: a yes/no answer.
+- `ask`: several questions in one request. Strings are yes/no. `Question.choice` and
+  `Question.score` add options and rubrics.
+- `choose`: pick one of your own objects. You get the object back.
+- `rank`: every candidate, best first, with its probability.
+- `branch`: pick a handler by its description and run only that one.
+- `probability`, `score`, `evidence`: the numbers behind an answer.
+
+## Live context
+
+The context can be an Effect. It is read every time a question runs.
+
+```ts
+const program = Effect.gen(function*() {
+  const facts = yield* Ref.make({ report, findings: [] });
+  const settled = Questions.about(Ref.get(facts)).is("Do the findings establish the cause?");
+
+  yield* probeOnce.pipe(Effect.repeat({ until: () => settled, times: 3 }));
+});
+```
+
+`settled` is one value. Each time it runs, it reads the current facts and asks again. That is a
+do-while loop with a model in the condition, and nothing new to learn.
+
+When the next step is a choice, offer "stop" as one of the candidates. One request then answers
+both "what next" and "are we done".
+
+## Modules
+
+- `Questions`: the API above.
+- `Question`: `choice`, `score`, and `boolean` definitions. Option keys are the answers.
+- `Answer`: rank, aggregate, and take expected values over probabilities.
+- `Decision`: confidence gates, expected loss, and dispatch over evidence.
+- `QuestionModel`: the provider service. [Jev](https://typesafe.ai) is the first provider.
 
 Built on Effect v4 and TypeScript 7.
 
 ## Run
 
-Requires Node 24 and pnpm. Live examples read `TYPESAFE_API_KEY` from your environment.
+Needs Node 24 and pnpm. Live examples read `TYPESAFE_API_KEY`.
 
 ```sh
 pnpm install
@@ -39,8 +73,6 @@ node examples/triage.ts
 node examples/investigation.ts
 ```
 
-[Runnable workflows](examples/README.md): ticket triage, a real-network investigation loop,
-a streamed conversation state machine, acceptance review of a Git diff, GitHub issue triage,
-documentation audits, and offline decisions.
+All examples are described in [examples/README.md](examples/README.md).
 
-Development: `pnpm check` · `pnpm build`.
+Development: `pnpm check` and `pnpm build`.

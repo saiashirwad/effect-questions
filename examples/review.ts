@@ -31,7 +31,8 @@ const run = Effect.fn("run")(function*(script: string) {
 const review = Effect.gen(function*() {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const git = (...args: ReadonlyArray<string>) => spawner.string(ChildProcess.make("git", args));
-  const files = (yield* git("diff", "--name-only", base)).split("\n").filter(Boolean);
+  const changed = yield* git("diff", "--name-only", base);
+  const files = changed.split("\n").filter(Boolean);
   if (files.length === 0) return yield* Console.log(`No tracked changes against ${base}.`);
   const patch = yield* git("diff", "--no-ext-diff", "--no-color", base, "--", ".");
   const q = Questions.about({ files, patch });

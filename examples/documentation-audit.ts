@@ -48,7 +48,7 @@ const workflow = Effect.gen(function*() {
 
   for (const { file, findings } of results) {
     yield* Console.log(file);
-    for (const [claim, supported] of Object.entries(findings)) {
+    for (const [claim, supported] of Record.toEntries(findings)) {
       yield* Console.log(`  ${supported ? "SUPPORTED" : "REVIEW"}: ${claim}`);
     }
   }

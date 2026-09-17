@@ -11,7 +11,7 @@ const report = "Since this morning the site feels slow for people in Europe, "
 const fetchPage = Effect.gen(function*() {
   const client = yield* HttpClient.HttpClient;
   const [elapsed, response] = yield* client.get(site).pipe(
-    Effect.tap((response) => response.text),
+    Effect.tap((response) => response.text), // time the whole body, not only the headers
     Effect.timed,
   );
   const header = (name: string) => response.headers[name] ?? null;
@@ -97,19 +97,17 @@ const investigate = Effect.gen(function*() {
     yield* Console.log(`Still plausible: ${Record.keys(hypotheses).join(", ") || "nothing"}`);
   }
 
-  const plausible = Record.values(hypotheses);
-  if (plausible.length === 0) {
+  const [first, ...rest] = Record.values(hypotheses);
+  if (!first) {
     return yield* Console.log("Every explanation was ruled out; hand the findings to a person.");
   }
-  const cause = plausible.length === 1
-    ? plausible[0]!
-    : yield* Questions.about({ report, findings })
-      .choose(
-        "Which remaining explanation fits the findings best?",
-        hypotheses,
-        ({ claim }) => claim,
-        { confidence: 0.4 },
-      );
+  const q = Questions.about({ report, findings });
+  const cause = rest.length === 0 ? first : yield* q.choose(
+    "Which remaining explanation fits the findings best?",
+    hypotheses,
+    ({ claim }) => claim,
+    { confidence: 0.4 },
+  );
   yield* Console.log(`Recommendation: ${cause.action}`);
 }).pipe(
   Effect.catchTag(
