@@ -12,6 +12,9 @@ Run from the repository root with Node 24 after `pnpm install`. Live examples re
 | `node examples/draft.ts`               | Watches `README.md`. Every save is judged against four reader needs. Exits when all are met.                                                             |
 | `node examples/review.ts`              | Judges the working-tree diff against plain-English requirements. Ranks changed files by how much they need a human. Runs the matching checks.            |
 | `node examples/github-triage.ts`       | Assesses the newest open issue, picks a maintainer workflow, ranks related issues, and checks the closest three for duplicates.                          |
+| `node examples/which.ts`               | Which Effect module do I need? Ranks all 138 installed modules by their own doc summaries, in one request. Change `need`.                                |
+| `node examples/bisect.ts`              | `git bisect` where the test is a question about the file at each commit. Binary search, one request per step.                                            |
+| `node examples/extraction.ts`          | Regex finds every amount and date in an email. The model picks the balance and the deadline. Answers are always substrings of the input.                 |
 | `node examples/documentation-audit.ts` | Checks six documented claims against the source that should support them.                                                                                |
 | `node examples/evidence.ts`            | Offline. Aggregation, expected loss, and a confidence gate. No API key needed.                                                                           |
 

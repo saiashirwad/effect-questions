@@ -6,7 +6,7 @@
  *
  * @since 0.0.0
  */
-import { Context, Effect, Schema } from "effect";
+import { Context, Effect, Metric, Record, Schema } from "effect";
 import * as Question from "./Question.ts";
 
 /**
@@ -93,7 +93,33 @@ export class QuestionModel extends Context.Service<QuestionModel, {
 }>()("effect-questions/QuestionModel") {}
 
 /**
+ * Tokens sent to the model, summed over every evaluation in the process.
+ * Read it with `Metric.value(QuestionModel.inputTokens)`.
+ *
+ * @category metrics
+ * @since 0.0.0
+ */
+export const inputTokens = Metric.counter("effect_questions_input_tokens", {
+  description: "Tokens sent to the question model",
+  incremental: true,
+});
+
+/**
+ * Tokens produced by the model, summed over every evaluation in the process.
+ *
+ * @category metrics
+ * @since 0.0.0
+ */
+export const outputTokens = Metric.counter("effect_questions_output_tokens", {
+  description: "Tokens produced by the question model",
+  incremental: true,
+});
+
+/**
  * Evaluates named questions using the `QuestionModel` service in the environment.
+ *
+ * Runs in a span annotated with the question keys, the model, and token usage,
+ * and adds the usage to `inputTokens` and `outputTokens`.
  *
  * With Jev, one batch is one HTTP request. Questions share state but are evaluated
  * separately; this does not imply statistical independence of their answers.
@@ -105,20 +131,25 @@ export class QuestionModel extends Context.Service<QuestionModel, {
  *
  * const assessment = QuestionModel.evaluate("Deployments fail after token rotation", {
  *   blocked: Question.boolean("Is production work blocked?"),
- *   impact: Question.score({
- *     instructions: "How disruptive is this issue?",
- *     criteria: ["Minor", "Work is impaired", "Production is blocked"],
- *   }),
+ *   impact: Question.score("How disruptive is this issue?", [
+ *     "Minor",
+ *     "Work is impaired",
+ *     "Production is blocked",
+ *   ]),
  * });
  * ```
  *
  * @category accessors
  * @since 0.0.0
  */
-export const evaluate = Effect.fnUntraced(function*<const Q extends Question.Questions>(
-  state: State,
-  questions: Q,
-) {
-  const model = yield* QuestionModel;
-  return yield* model.evaluate(state, questions);
-});
+export const evaluate = Effect.fn("QuestionModel.evaluate")(
+  function*<const Q extends Question.Questions>(state: State, questions: Q) {
+    const model = yield* QuestionModel;
+    yield* Effect.annotateCurrentSpan("questions", Record.keys(questions));
+    const evaluation = yield* model.evaluate(state, questions);
+    yield* Effect.annotateCurrentSpan({ model: evaluation.model, ...evaluation.usage });
+    yield* Metric.update(inputTokens, evaluation.usage.inputTokens);
+    yield* Metric.update(outputTokens, evaluation.usage.outputTokens);
+    return evaluation;
+  },
+);

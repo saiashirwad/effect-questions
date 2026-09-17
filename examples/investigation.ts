@@ -1,8 +1,8 @@
 import { NodeRuntime } from "@effect/platform-node";
-import { Config, Console, Duration, Effect, Layer, Record, type Schema } from "effect";
+import { Config, Console, Duration, Effect, Layer, Metric, Record, type Schema } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { resolve4 } from "node:dns/promises";
-import { Jev, Questions } from "../src/index.ts";
+import { Jev, QuestionModel, Questions } from "../src/index.ts";
 
 const site = "https://effect.website";
 const report = "Since this morning the site feels slow for people in Europe, "
@@ -75,6 +75,9 @@ const investigate = Effect.gen(function*() {
     { confidence: 0.4 },
   );
   yield* Console.log(`Most likely: ${cause}`);
+
+  const { count: tokens } = yield* Metric.value(QuestionModel.inputTokens);
+  yield* Console.log(`Cost: ${tokens} input tokens.`);
 }).pipe(
   Effect.catchTag(
     "UncertainDecision",

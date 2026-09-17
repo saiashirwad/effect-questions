@@ -85,7 +85,8 @@ both "what next" and "are we done".
 - `Question`: `choice`, `score`, and `boolean` definitions. Option keys are the answers.
 - `Answer`: rank, aggregate, and take expected values over probabilities.
 - `Decision`: confidence gates, expected loss, and dispatch over evidence.
-- `QuestionModel`: the provider service. [Jev](https://typesafe.ai) is the first provider.
+- `QuestionModel`: the provider service, plus token metrics and a span per evaluation.
+  [Jev](https://typesafe.ai) is the first provider.
 
 Built on Effect v4 and TypeScript 7.
 
