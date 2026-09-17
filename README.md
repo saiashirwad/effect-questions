@@ -1,6 +1,6 @@
 # effect-questions
 
-Semantic judgment as a primitive for Effect programs.
+Semantic judgment as an Effect primitive.
 
 ```ts
 const triage = Effect.gen(function*() {
