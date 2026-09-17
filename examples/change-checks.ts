@@ -11,13 +11,21 @@ class CheckFailed extends Schema.TaggedError<CheckFailed>()("CheckFailed", {
   exitCode: Schema.Int,
 }) {}
 
-const run = Effect.fn("run")(function*(script: string) {
+const runCheck = Effect.fn("runCheck")(function*(script: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   yield* Console.log(`Running pnpm ${script}`);
+
   const exitCode = yield* spawner.exitCode(
-    ChildProcess.make("pnpm", [script], { stdout: "inherit", stderr: "inherit" }),
+    ChildProcess.make("pnpm", [script], {
+      stdout: "inherit",
+      stderr: "inherit",
+    }),
   );
-  if (exitCode !== 0) return yield* new CheckFailed({ script, exitCode });
+
+  if (exitCode !== 0) {
+    return yield* new CheckFailed({ script, exitCode });
+  }
 });
 
 const workflow = Effect.gen(function*() {
@@ -32,15 +40,16 @@ const workflow = Effect.gen(function*() {
     publicApi: "Does this diff change the public API, exports, or inferred types?",
     provider: "Does this diff change HTTP behavior, request encoding, or response decoding?",
   });
+
   if (changes.publicApi) yield* Console.log("Review downstream API compatibility.");
   if (changes.provider) yield* Console.log("Review provider integration behavior.");
 
   yield* q.branch("Which verification workload fits the changes in this diff?", {
-    "Only prose or comments changed; formatting is sufficient": () => run("format:check"),
+    "Only prose or comments changed; formatting is sufficient": () => runCheck("format:check"),
     "Source, examples, tooling, or dependencies changed; run all static checks and compile": () =>
       Effect.gen(function*() {
-        yield* run("check");
-        yield* run("build");
+        yield* runCheck("check");
+        yield* runCheck("build");
       }),
   });
 });
