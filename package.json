@@ -2,7 +2,7 @@
   "name": "effect-questions",
   "version": "0.0.0",
   "private": true,
-  "description": "Type-safe AI judgments and probabilistic control flow for Effect.",
+  "description": "Semantic judgments as ordinary Effect control flow.",
   "type": "module",
   "packageManager": "pnpm@11.20.0",
   "engines": {
@@ -23,8 +23,8 @@
   "types": "./dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "example": "node examples/flow.ts",
-    "example:triage": "node examples/main.ts",
+    "example": "node examples/triage.ts",
+    "example:investigation": "node examples/investigation.ts",
     "example:evidence": "node examples/evidence.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

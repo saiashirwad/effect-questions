@@ -1,30 +1,46 @@
 # effect-questions
 
-Type-safe AI judgments and probabilistic control flow for Effect.
+Semantic judgments as ordinary Effect control flow.
 
-Bind context with `Questions.about(state)`. Ask with `yield* q.is(question)`, batch with
-`q.ask`, or run lazy Effect handlers with `q.branch`. Use ordinary `if` statements and
-generators; retain detailed evidence when you need confidence or expected-loss policies.
+Bind context with `Questions.about(state)`, then write the program you would have written
+anyway: `if (yield* q.is(...))`, `switch` on a typed choice from `q.ask`, pick an application
+object with `q.choose`, or run only the matching handler with `q.branch`. Uncertainty is an
+ordinary error when you ask for a minimum confidence; evidence is available when you want it.
 
-- **Questions** — bind context, ask questions, and branch into ordinary Effects.
-- **Question** — define typed batches when you need explicit schemas.
-- **Answer** — rank outcomes, aggregate probabilities, and calculate expected values.
-- **Decision** — inspect expected losses, choose actions, and dispatch effects exhaustively.
-- **QuestionModel** — evaluate batches and select original application objects through replaceable providers.
+```ts
+const q = Questions.about(ticket);
 
-[Jev](https://typesafe.ai) is the first provider. Built on Effect v4 and TypeScript 7.
+if (yield * q.is("Is production work blocked?")) {
+  yield * prioritize(ticket);
+}
+
+return yield * q.branch("What kind of help is needed?", {
+  "Invoices, payments, or refunds": () => handleBilling(ticket),
+  "Bugs, outages, or deployment failures": () => investigate(ticket),
+  "Account access or membership": () => handleAccount(ticket),
+}, { confidence: 0.6 });
+```
+
+- **Questions** — `about(state)` with `is`, `ask`, `score`, `probability`, `choose`, `rank`, `branch`, `evidence`.
+- **Question** — `choice`, `score`, `boolean` definitions for typed batches; option keys are the answers.
+- **Answer** — rank outcomes, aggregate probabilities, and compute expected values.
+- **Decision** — confidence gates, expected losses, and exhaustive dispatch over evidence.
+- **QuestionModel** — the provider service; [Jev](https://typesafe.ai) is the first provider.
+
+Built on Effect v4 and TypeScript 7.
 
 ## Run
 
-Requires Node 24 and pnpm. The live example reads `TYPESAFE_API_KEY` from your environment.
+Requires Node 24 and pnpm. Live examples read `TYPESAFE_API_KEY` from your environment.
 
 ```sh
 pnpm install
-node examples/evidence.ts
-node examples/flow.ts
+node examples/triage.ts
+node examples/investigation.ts
 ```
 
-[Runnable workflows](examples/README.md): Git-diff check selection, source-based documentation audits,
-live GitHub issue triage, support diagnostics, and offline decisions.
+[Runnable workflows](examples/README.md): ticket triage, a real-network investigation loop,
+a streamed conversation state machine, acceptance review of a Git diff, GitHub issue triage,
+documentation audits, and offline decisions.
 
 Development: `pnpm check` · `pnpm build`.

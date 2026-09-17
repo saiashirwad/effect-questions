@@ -13,6 +13,9 @@ const Issue = Schema.Struct({
   html_url: Schema.String,
   pull_request: Schema.optionalKey(Schema.Unknown),
 });
+type Issue = typeof Issue.Type;
+
+const summary = ({ title, body }: Issue) => ({ title, body });
 
 const workflow = Effect.gen(function*() {
   const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
@@ -25,7 +28,7 @@ const workflow = Effect.gen(function*() {
   if (!issue) return yield* Console.log("No open issues in the fetched page.");
 
   yield* Console.log(`#${issue.number}: ${issue.title}\n${issue.html_url}`);
-  const q = Questions.about({ title: issue.title, body: issue.body });
+  const q = Questions.about(summary(issue));
   const assessment = yield* q.ask({
     actionable: "Does this report provide concrete behavior or a specific requested change?",
     reproduction: "Does this report include code or steps that reproduce the problem?",
@@ -41,21 +44,23 @@ const workflow = Effect.gen(function*() {
   });
 
   if (others.length < 2) return;
-  const candidate = yield* q.choose(
-    "Which existing issue is most related to this report? Similarity alone does not mean duplicate.",
-    Object.fromEntries(others.slice(0, candidateLimit).map((item) => [String(item.number), item])),
-    (item) => `${item.title}\n${item.body ?? ""}`,
+  const related = yield* q.rank(
+    "Which existing issue is most related to this report?",
+    others.slice(0, candidateLimit),
+    summary,
   );
-  const duplicate = yield* Questions.about({
-    issue: { title: issue.title, body: issue.body },
-    candidate: { title: candidate.title, body: candidate.body },
-  }).is(
-    "Do both reports describe the same concrete defect or requested change, rather than just the same topic?",
+  const duplicates = yield* Effect.filter(
+    related.slice(0, 3),
+    ({ value: other }) =>
+      Questions.about({ issue: summary(issue), other: summary(other) }).is(
+        "Do both reports describe the same concrete defect or requested change, rather than just the same topic?",
+      ),
+    { concurrency: 3 },
   );
   yield* Console.log(
-    duplicate
-      ? `Possible duplicate: ${candidate.html_url}`
-      : "No duplicate established among the candidates.",
+    duplicates.length === 0
+      ? "No duplicate established among the closest candidates."
+      : `Possible duplicates:\n${duplicates.map(({ value }) => `  ${value.html_url}`).join("\n")}`,
   );
 });
 

@@ -6,7 +6,7 @@
  *
  * @since 0.0.0
  */
-import { Context, Effect, Record, Schema } from "effect";
+import { Context, Effect, Schema } from "effect";
 import * as Question from "./Question.ts";
 
 /**
@@ -122,73 +122,3 @@ export const evaluate = Effect.fnUntraced(function*<const Q extends Question.Que
   const model = yield* QuestionModel;
   return yield* model.evaluate(state, questions);
 });
-
-/**
- * Selects an original application value from candidates keyed by stable IDs.
- *
- * Sends only the supplied state, instructions, candidate IDs, and descriptions
- * to the provider. Candidate objects may contain Effects or other non-JSON values.
- * The result adds the original object as `value` and preserves choice evidence,
- * model identifier, and usage. It never executes a candidate's behavior.
- *
- * Candidate membership is shallow-copied when the Effect executes; object identity
- * is retained. At least two candidates are required, subject to provider limits.
- * Include an explicit alternative if none of the candidates may be appropriate.
- *
- * @example
- * ```ts
- * import { Effect } from "effect";
- * import { QuestionModel } from "effect-questions";
- *
- * const selection = QuestionModel.choose({
- *   state: "The API returns 403 after token rotation",
- *   instructions: "Which diagnostic should run first?",
- *   candidates: {
- *     credentials: { summary: "Compare token scopes", inspect: Effect.succeed("Token metadata") },
- *     status: { summary: "Inspect active incidents", inspect: Effect.succeed("Service status") },
- *   },
- *   describe: (candidate) => candidate.summary,
- * });
- * ```
- *
- * @category accessors
- * @since 0.0.0
- */
-export const choose = Effect.fnUntraced(
-  function*<const Candidates extends Readonly<Record<string, unknown>>>(
-    options: {
-      /** Serializable context for the selection. */
-      readonly state: State;
-      /** What makes one candidate preferable to the others. */
-      readonly instructions: string;
-      /** Available values indexed by stable, unique IDs. */
-      readonly candidates: Candidates;
-      /** Purely describes a candidate; called once per candidate per evaluation. */
-      readonly describe: (
-        candidate: Candidates[keyof Candidates],
-        id: keyof Candidates & string,
-      ) => string;
-    },
-  ) {
-    const candidates = { ...options.candidates };
-    const result = yield* evaluate(options.state, {
-      selection: Question.choice(
-        Schema.Literals(Record.keys<keyof Candidates & string, unknown>(candidates)),
-        {
-          instructions: options.instructions,
-          criteria: Record.map<keyof Candidates & string, Candidates[keyof Candidates], string>(
-            candidates,
-            options.describe,
-          ),
-        },
-      ),
-    });
-    const answer = result.answers.selection;
-    return {
-      ...answer,
-      value: candidates[answer.choice] as Candidates[keyof Candidates],
-      model: result.model,
-      usage: result.usage,
-    };
-  },
-);

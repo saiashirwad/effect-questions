@@ -24,6 +24,8 @@ export class UncertainDecision
     confidence: Answer.Probability,
     /** The caller's required lower bound. */
     minimum: Answer.Probability,
+    /** The instructions of the question whose answer was rejected, when known. */
+    question: Schema.optionalKey(Schema.String),
   })
 {}
 
@@ -108,9 +110,8 @@ export type Costs<Outcome extends string, Action extends string = string> = Read
  * @category schemas
  * @since 0.0.0
  */
-export const Risk = <const Actions extends ReadonlyArray<string>>(
-  actions: Schema.Literals<Actions>,
-) => Schema.Struct({ choice: actions, expectedLoss: Schema.Finite });
+export const Risk = <const Actions extends ReadonlyArray<string>>(actions: Actions) =>
+  Schema.Struct({ choice: Schema.Literals(actions), expectedLoss: Schema.Finite });
 
 /**
  * An available action paired with its probability-weighted cost.
@@ -210,7 +211,7 @@ export const risks: {
       Schema.Finite,
       Schema.Record(Schema.Literals(outcomes), Schema.Finite),
     ]);
-    const Evaluated = Schema.NonEmptyArray(Risk(Schema.Literals(Record.keys(costs))));
+    const Evaluated = Schema.NonEmptyArray(Risk(Record.keys(costs)));
 
     return yield* pipe(
       costs,

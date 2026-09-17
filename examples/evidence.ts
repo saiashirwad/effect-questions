@@ -2,10 +2,10 @@ import { NodeRuntime } from "@effect/platform-node";
 import { Console, Effect, Schema } from "effect";
 import { Answer, Decision } from "../src/index.ts";
 
-const Intent = Schema.Literals(["billing-question", "refund-request", "technical-problem"]);
+const Intent = Answer.Choice(["billing-question", "refund-request", "technical-problem"]);
 
 const main = Effect.gen(function*() {
-  const answer = yield* Schema.decodeUnknownEffect(Answer.Choice(Intent))({
+  const answer = yield* Schema.decodeUnknownEffect(Intent)({
     type: "choice",
     choice: "billing-question",
     probabilities: { "billing-question": 0.36, "refund-request": 0.34, "technical-problem": 0.3 },
@@ -37,6 +37,15 @@ const main = Effect.gen(function*() {
     technical: () => Console.log("Route to technical support."),
     clarify: () => Console.log("Ask which part of the request matters most."),
   });
+
+  yield* Decision.requireConfidence(answer, 0.7).pipe(
+    Effect.andThen(Console.log("Confident enough to act on the fine-grained intent.")),
+    Effect.catchTag(
+      "UncertainDecision",
+      ({ confidence, minimum }) =>
+        Console.log(`Intent confidence ${confidence} is below ${minimum}; keep the coarse route.`),
+    ),
+  );
 });
 
 NodeRuntime.runMain(main);

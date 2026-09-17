@@ -27,10 +27,9 @@ export const Probability = Schema.Finite.check(Schema.isBetween({ minimum: 0, ma
  *
  * @example
  * ```ts
- * import { Schema } from "effect";
  * import { Answer } from "effect-questions";
  *
- * const Route = Answer.Choice(Schema.Literals(["billing", "technical"]));
+ * const Route = Answer.Choice(["billing", "technical"]);
  * const answer = Route.make({
  *   type: "choice",
  *   choice: "technical",
@@ -42,15 +41,15 @@ export const Probability = Schema.Finite.check(Schema.isBetween({ minimum: 0, ma
  * @category schemas
  * @since 0.0.0
  */
-export const Choice = <const Options extends ReadonlyArray<string>>(
-  options: Schema.Literals<Options>,
-) =>
-  Schema.Struct({
+export const Choice = <const Options extends ReadonlyArray<string>>(options: Options) => {
+  const literals = Schema.Literals(options);
+  return Schema.Struct({
     type: Schema.Literal("choice"),
-    choice: options,
-    probabilities: Schema.Record(options, Probability),
+    choice: literals,
+    probabilities: Schema.Record(literals, Probability),
     confidence: Probability,
   });
+};
 
 /**
  * A choice answer retaining its literal option type and complete distribution.
@@ -124,15 +123,18 @@ export interface Distribution<A extends string> {
 }
 
 /**
- * An outcome paired with its probability, as returned by ranking operations.
+ * A value paired with its probability, as returned by ranking operations.
+ *
+ * Distribution operations rank outcome keys; `Questions.rank` ranks the original
+ * application objects behind those keys.
  *
  * @category models
  * @since 0.0.0
  */
-export interface Ranked<A extends string> {
-  /** The original outcome key. */
+export interface Ranked<A> {
+  /** The ranked outcome or candidate. */
   readonly value: A;
-  /** The probability assigned to this outcome. */
+  /** The probability assigned to it. */
   readonly probability: number;
 }
 

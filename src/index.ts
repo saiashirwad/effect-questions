@@ -29,13 +29,13 @@ export * as Jev from "./providers/Jev.ts";
  */
 export * as Question from "./Question.ts";
 /**
- * Context-bound questions and semantic branches for ordinary Effect programs.
+ * Context-bound questions, candidate selection, and semantic branches.
  * @category exports
  * @since 0.0.0
  */
 export * as Questions from "./Questions.ts";
 /**
- * The evaluation service and candidate-selection accessors.
+ * The evaluation service implemented by providers.
  * @category exports
  * @since 0.0.0
  */

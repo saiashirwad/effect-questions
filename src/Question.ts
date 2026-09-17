@@ -10,8 +10,26 @@ import { Record, Schema } from "effect";
 import * as Answer from "./Answer.ts";
 
 /**
+ * Text or labeled JSON describing an option or outcome to the model. `null`
+ * lets the option's name carry its meaning.
+ *
+ * @category schemas
+ * @since 0.0.0
+ */
+export const Description = Schema.NullOr(
+  Schema.Union([Schema.String, Schema.JsonObject, Schema.Array(Schema.Json)]),
+);
+
+/**
+ * A description accepted anywhere a question describes its options.
+ *
+ * @category models
+ * @since 0.0.0
+ */
+export type Description = typeof Description.Type;
+
+/**
  * A closed-choice definition with non-empty instructions and at least two options.
- * A null description allows an option's name to supply its meaning.
  *
  * @category schemas
  * @since 0.0.0
@@ -19,9 +37,7 @@ import * as Answer from "./Answer.ts";
 export const ChoiceDefinition = Schema.Struct({
   type: Schema.Literal("choice"),
   instructions: Schema.NonEmptyString,
-  criteria: Schema.Record(Schema.String, Schema.NullOr(Schema.String)).check(
-    Schema.isMinProperties(2),
-  ),
+  criteria: Schema.Record(Schema.String, Description).check(Schema.isMinProperties(2)),
 });
 
 /**
@@ -45,7 +61,7 @@ export const ScoreDefinition = Schema.Struct({
 export const BooleanDefinition = Schema.Struct({
   type: Schema.Literal("boolean"),
   instructions: Schema.NonEmptyString,
-  criteria: Schema.optionalKey(Schema.Struct({ true: Schema.String, false: Schema.String })),
+  criteria: Schema.optionalKey(Schema.Struct({ true: Description, false: Description })),
 });
 
 /**
@@ -71,64 +87,60 @@ export interface Question<A> {
 }
 
 /**
- * Constructs a question whose selected answer is one of the supplied literals.
+ * Constructs a question whose answer is one of the option keys.
  *
- * Criteria must describe every option. The constructor preserves literal types;
- * providers validate the definition when evaluating it. Option-count limits
- * beyond the two-option minimum belong to the provider.
+ * The keys are the alternatives offered to the model and the literal type of the
+ * answer; each value describes its key. Option-count limits beyond the two-option
+ * minimum belong to the provider.
  *
  * @example
  * ```ts
- * import { Schema } from "effect";
  * import { Question } from "effect-questions";
  *
- * const route = Question.choice(Schema.Literals(["billing", "technical"]), {
- *   instructions: "Which team owns this issue?",
- *   criteria: { billing: "Invoices and charges", technical: "API and integration errors" },
+ * const owner = Question.choice("Which team owns this issue?", {
+ *   billing: "Invoices and charges",
+ *   technical: { what: "API and integration errors", not: "Pricing questions" },
  * });
  * ```
  *
  * @category constructors
  * @since 0.0.0
  */
-export const choice = <const Options extends ReadonlyArray<string>>(
-  options: Schema.Literals<Options>,
-  config: {
-    /** The specific judgment to make against the evaluation state. */
-    readonly instructions: string;
-    /** Descriptions keyed by the same literals as `options`. */
-    readonly criteria: { readonly [K in NoInfer<Options[number]>]: string | null; };
-  },
-): Question<Answer.Choice<Options[number]>> => ({
-  definition: { type: "choice", ...config },
-  answer: Answer.Choice(options),
+export const choice = <const Options extends Readonly<Record<string, Description>>>(
+  instructions: string,
+  options: Options,
+): Question<Answer.Choice<keyof Options & string>> => ({
+  definition: { type: "choice", instructions, criteria: options },
+  answer: Answer.Choice(Record.keys(options) as ReadonlyArray<keyof Options & string>),
 });
 
 /**
  * Constructs a question over ordered levels. Its answer retains the full
  * distribution as well as a weighted, zero-based score and confidence.
  *
+ * @param instructions - The property to evaluate against the rubric.
+ * @param levels - Level descriptions in ascending order, starting at index zero.
+ *
  * @example
  * ```ts
  * import { Question } from "effect-questions";
  *
- * const impact = Question.score({
- *   instructions: "How disruptive is the issue?",
- *   criteria: ["Work continues", "Some work is impaired", "Production is blocked"],
- * });
+ * const impact = Question.score("How disruptive is the issue?", [
+ *   "Work continues",
+ *   "Some work is impaired",
+ *   "Production is blocked",
+ * ]);
  * ```
  *
  * @category constructors
  * @since 0.0.0
  */
-export const score = (config: {
-  /** The property to evaluate against the rubric. */
-  readonly instructions: string;
-  /** Level descriptions in ascending score order, starting at index zero. */
-  readonly criteria: readonly [string, string, ...string[]];
-}): Question<Answer.Score> => ({
-  definition: { type: "score", ...config },
-  answer: Answer.Score(config.criteria),
+export const score = (
+  instructions: string,
+  levels: readonly [string, string, ...string[]],
+): Question<Answer.Score> => ({
+  definition: { type: "score", instructions, criteria: levels },
+  answer: Answer.Score(levels),
 });
 
 /**
@@ -149,7 +161,7 @@ export const score = (config: {
  */
 export const boolean = (
   instructions: string,
-  criteria?: { readonly true: string; readonly false: string; },
+  criteria?: { readonly true: Description; readonly false: Description; },
 ): Question<Answer.Boolean> => ({
   definition: { type: "boolean", instructions, ...(criteria === undefined ? {} : { criteria }) },
   answer: Answer.Boolean,
